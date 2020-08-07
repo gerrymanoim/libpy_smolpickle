@@ -9,13 +9,13 @@
 
 namespace libpy_smolpickle {
 
-enum {
+enum class protocols: int {
     LOWEST_PROTOCOL = 5,
     HIGHEST_PROTOCOL = 5,
     DEFAULT_PROTOCOL = 5,
 };
 
-enum opcode {
+enum class opcode: char {
     MARK = '(',
     STOP = '.',
     POP = '0',
@@ -96,7 +96,9 @@ enum opcode {
     STACK_GLOBAL = '\x93',
 };
 
-enum {
+
+// TODO - do we need this?
+enum class batchsize: int {
     /* Number of elements save_list/dict/set writes out before
      * doing APPENDS/SETITEMS/ADDITEMS. */
     BATCHSIZE = 1000,
@@ -114,8 +116,8 @@ public:
     unpickler() = default;
 
     int load_binint(std::string_view tape, std::size_t tape_head, std::size_t n_to_read) {
-        long num = std::stol(tape.substr(tape_head + 1, n_to_read).c_str());
-        m_stack.push(num);
+        long num = std::stol(tape.substr(tape_head + 1, n_to_read).data());
+        m_stack.push(py::to_object(num));
         return tape_head + n_to_read + 1;
     }
 
@@ -123,30 +125,30 @@ public:
         for (std::size_t tape_head = 0; tape_head < tape.length(); ++tape_head) {
             opcode op = static_cast<opcode>(tape[tape_head]);
             switch (op) {
-            case PROTO: {
+            case opcode::PROTO: {
                 // advance it one to get the protocol
                 // throw an error if it is too low
                 tape_head += 1;
                 int proto = tape[tape_head];
-                if (proto > HIGHEST_PROTOCOL) {
+                if (static_cast<protocols>(proto) > protocols::HIGHEST_PROTOCOL) {
                     throw py::exception(PyExc_ValueError,
                                         "Unsupported pickle protocol",
                                         proto);
                 }
             } break;
-            case NONE:
+            case opcode::NONE:
                 m_stack.push(py::none);
                 break;
-            case BININT:
+            case opcode::BININT:
                 tape_head = load_binint(tape, tape_head, 4);
                 break;
-            case BININT1:
+            case opcode::BININT1:
                 tape_head = load_binint(tape, tape_head, 1);
                 break;
-            case BININT2:
+            case opcode::BININT2:
                 tape_head = load_binint(tape, tape_head, 2);
                 break;
-            case STOP: {
+            case opcode::STOP: {
 
             } break;
             default:
