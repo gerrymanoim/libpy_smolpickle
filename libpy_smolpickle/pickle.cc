@@ -1,4 +1,5 @@
 #include <stack>
+#include <string>
 #include <unordered_set>
 
 #include <libpy/autoclass.h>
@@ -113,7 +114,7 @@ public:
     unpickler() = default;
 
     int load_binint(std::string_view tape, std::size_t tape_head, std::size_t n_to_read) {
-        long num = std::atol(tape.substr(tape_head + 1, n_to_read));
+        long num = std::stol(tape.substr(tape_head + 1, n_to_read).c_str());
         m_stack.push(num);
         return tape_head + n_to_read + 1;
     }
