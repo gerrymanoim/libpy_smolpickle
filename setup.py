@@ -7,7 +7,7 @@ import sys
 from libpy.build import LibpyExtension
 from setuptools import find_packages, setup
 
-if ast.literal_eval(os.environ.get("LIBPY_your_package_name_DEBUG_BUILD", "0")):
+if ast.literal_eval(os.environ.get("LIBPY_SMOLPICKLE_DEBUG_BUILD", "0")):
     optlevel = 0
     debug_symbols = True
     max_errors = 5
@@ -45,9 +45,9 @@ install_requires = [
 ]
 
 setup(
-    name="your-package-name",
+    name="libpy_smolpickle",
     version="0.1.0",
-    description="Python bindings for your-package-name, using libpy",
+    description="Python bindings for smolpickle, using libpy",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="",
@@ -78,8 +78,8 @@ setup(
     },
     ext_modules=[
         extension(
-            "your_package_name.module",
-            ["your_package_name/module.cc"],
+            "libpy_smolpickle.pickle",
+            ["libpy_smolpickle/pickle.cc"],
         ),
     ],
 )
