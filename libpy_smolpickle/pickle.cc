@@ -112,29 +112,44 @@ public:
     // TODO - take real parameters
     unpickler() = default;
 
+    int load_binint(std::string_view tape, std::size_t tape_head, std::size_t n_to_read) {
+        long num = std::atol(tape.substr(tape_head + 1, n_to_read));
+        m_stack.push(num);
+        return tape_head + n_to_read + 1;
+    }
+
     py::owned_ref<> loads(std::string_view tape) {
-        for (std::string_view::iterator it = tape.begin(); it != tape.end(); ++it) {
-            opcode op = static_cast<opcode>(*it);
+        for (std::size_t tape_head = 0; tape_head < tape.length(); ++tape_head) {
+            opcode op = static_cast<opcode>(tape[tape_head]);
             switch (op) {
-            case NONE:
-                m_stack.push(py::none);
-                break;
             case PROTO: {
                 // advance it one to get the protocol
                 // throw an error if it is too low
-                ++it;
-                int proto = *it;
+                tape_head += 1;
+                int proto = tape[tape_head];
                 if (proto > HIGHEST_PROTOCOL) {
                     throw py::exception(PyExc_ValueError,
                                         "Unsupported pickle protocol",
                                         proto);
                 }
             } break;
+            case NONE:
+                m_stack.push(py::none);
+                break;
+            case BININT:
+                tape_head = load_binint(tape, tape_head, 4);
+                break;
+            case BININT1:
+                tape_head = load_binint(tape, tape_head, 1);
+                break;
+            case BININT2:
+                tape_head = load_binint(tape, tape_head, 2);
+                break;
             case STOP: {
 
             } break;
             default:
-                throw py::exception(PyExc_ValueError, "Unknown op code encountered", *it);
+                throw py::exception(PyExc_ValueError, "Unknown op code encountered", tape[tape_head]);
             }
         }
         auto out = m_stack.top();
