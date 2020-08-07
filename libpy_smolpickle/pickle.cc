@@ -1,3 +1,4 @@
+#include <iostream>
 #include <stack>
 #include <string>
 #include <unordered_set>
@@ -9,13 +10,13 @@
 
 namespace libpy_smolpickle {
 
-enum class protocols: int {
+enum class protocols : int {
     LOWEST_PROTOCOL = 5,
     HIGHEST_PROTOCOL = 5,
     DEFAULT_PROTOCOL = 5,
 };
 
-enum class opcode: char {
+enum class opcode : char {
     MARK = '(',
     STOP = '.',
     POP = '0',
@@ -96,9 +97,8 @@ enum class opcode: char {
     STACK_GLOBAL = '\x93',
 };
 
-
 // TODO - do we need this?
-enum class batchsize: int {
+enum class batchsize : int {
     /* Number of elements save_list/dict/set writes out before
      * doing APPENDS/SETITEMS/ADDITEMS. */
     BATCHSIZE = 1000,
@@ -116,8 +116,23 @@ public:
     unpickler() = default;
 
     int load_binint(std::string_view tape, std::size_t tape_head, std::size_t n_to_read) {
-        long num = std::stol(tape.substr(tape_head + 1, n_to_read).data());
+        // TODO - is there a better way to do this
+        long num = 0;
+        for (std::size_t i = 0; i < n_to_read; i++) {
+            num |= long(static_cast<unsigned char>(tape[tape_head + 1 + i])) << (8 * i);
+        }
+        // via https://github.com/jcrist/smolpickle/blob/3d2adcf7a024448e1756c4d6fb5173803e3ddbe8/smolpickle.c#L2010
+        if (SIZEOF_LONG > 4 && n_to_read == 4) {
+            num |= -(num & (1L << 31));
+        }
+
         m_stack.push(py::to_object(num));
+        return tape_head + n_to_read + 1;
+    }
+
+    int load_string(std::string_view tape, std::size_t tape_head, std::size_t n_to_read) {
+        auto s = std::string(tape.substr(tape_head + 1, n_to_read + 1));  // c_str?
+        m_stack.push(py::to_object(s));
         return tape_head + n_to_read + 1;
     }
 
@@ -139,6 +154,15 @@ public:
             case opcode::NONE:
                 m_stack.push(py::none);
                 break;
+            case opcode::NEWTRUE:
+                m_stack.push(py::to_object(true));
+                break;
+            case opcode::NEWFALSE:
+                m_stack.push(py::to_object(false));
+                break;
+            case opcode::STOP: {
+
+            } break;
             case opcode::BININT:
                 tape_head = load_binint(tape, tape_head, 4);
                 break;
@@ -148,11 +172,41 @@ public:
             case opcode::BININT2:
                 tape_head = load_binint(tape, tape_head, 2);
                 break;
-            case opcode::STOP: {
-
+            case opcode::FRAME:
+                // not entirely sure I need frames
+                // TODO - deal with this properly instead of skipping
+                // https://www.python.org/dev/peps/pep-3154/#framing
+                tape_head += 8;
+                break;
+            case opcode::MEMOIZE:
+                m_memo.insert(m_stack.top());
+                break;
+            // todo I don't know that this is right
+            case opcode::LONG1:
+                tape_head = load_binint(tape, tape_head, 1);
+                break;
+            case opcode::LONG4:
+                tape_head = load_binint(tape, tape_head, 4);
+                break;
+            case opcode::BINFLOAT: {
+                float f = std::stof(tape.substr(tape_head + 1, 8).data());
+                m_stack.push(py::to_object(f));
+                tape_head += 8 + 1;
             } break;
+            case opcode::SHORT_BINBYTES:
+                tape_head = load_string(tape, tape_head, 1);
+                break;
+            case opcode::BINBYTES:
+                tape_head = load_string(tape, tape_head, 4);
+                break;
+            case opcode::BINBYTES8:
+                tape_head = load_string(tape, tape_head, 8);
+                break;
+            // end section I think is just wrong
             default:
-                throw py::exception(PyExc_ValueError, "Unknown op code encountered", tape[tape_head]);
+                throw py::exception(PyExc_ValueError,
+                                    "Unknown op code encountered",
+                                    tape[tape_head]);
             }
         }
         auto out = m_stack.top();
